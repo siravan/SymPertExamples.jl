@@ -1,15 +1,10 @@
-<script type="text/javascript" async
-src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.2/MathJax.js?
-config=TeX-MML-AM_CHTML"
-</script>
------
 # Using SciML Symbolics to Solve Perturbation Problems
 
 ## Background
 
 [**Symbolics.jl**](https://github.com/JuliaSymbolics/Symbolics.jl) is a fast and modern Computer Algebra System (CAS) written in Julia Programming Language. It is part of the [SciML](https://sciml.ai/) ecosystem of differential equation solvers and scientific machine learning packages. While **Symbolics.jl** is primarily designed for modern scientific computing (e.g., machine learning), it is a powerful CAS and can be useful in *classic* scientific computing, like *perturbation* problems.
 
-Perturbation methods are a collection of techniques to solve algebraic and differential equations. The target problems generally don't have a closed solution. However, they depend on a tunable parameter and have closed-form or easy solutions for some values of the parameter. The main idea is to assume a solution as a power series in the tunable parameter (say $\epsilon$), such that $\epsilon = 0$ corresponds to a closed solution.
+Perturbation methods are a collection of techniques to solve algebraic and differential equations. The target problems generally don't have a closed solution. However, they depend on a tunable parameter and have closed-form or easy solutions for some values of the parameter. The main idea is to assume a solution as a power series in the tunable parameter (say ϵ), such that ϵ = 0 corresponds to a closed solution.
 
 We will discuss the general steps of the perturbation methods in four examples below. One hallmark of the perturbation method is the generation of long and involved intermediate equations, which are subjected to algorithmic and mechanical manipulations. Therefore, these problems are well suited for CAS. In fact, CAS softwares have been used to help with the perturbation calculations since the 1950s.
 
@@ -17,7 +12,7 @@ In this tutorial our goal is to show how to use Julia and **Symbolics.jl** to so
 
 ## Solving the Quintic
 
-We start with the "hello world!" analog of the perturbation problems: solving the quintic (fifth-order) equations. We want to find $x$ such that $x^5 + x = 1$. According to the Abel's theorem, a general quintic equation does not have a closed form solution. Of course, we can easily solve this equation numerically; for example, using the Newton's method. Here, we use the following implementation of the Newton's method:
+We start with the "hello world!" analog of the perturbation problems: solving the quintic (fifth-order) equations. We want to find 𝑥 such that 𝑥⁵ + 𝑥 = 1. According to the Abel's theorem, a general quintic equation does not have a closed form solution. Of course, we can easily solve this equation numerically; for example, using the Newton's method. Here, we use the following implementation of the Newton's method:
 
 ```Julia
 function solve_newton(f, x, x₀; abstol=1e-8, maxiter=50)
@@ -40,53 +35,38 @@ In this code, `Symbolics.derivative(eq, x)` does exactly what it names implies: 
 
 Let's go back to our quintic. We can define a Symbolics variable as `@variables x` and then solve the equation as `solve_newton(x^5 + x - 1, x, 1.0)` (here, `x₀ = 0` is our first guess). The answer is `x = 0.7549`. Now, let's see how we can solve this problem using the perturbation method.
 
-We introduce a tuning parameter $\epsilon$ into our equation: $x^5 + \epsilon x = 1$. If $\epsilon = 1$, we get our original problem. For $\epsilon = 0$, the problem transforms to an easy one: $x^5 = 1$ which has a solution $x = 1$ (and four complex solutions which we ignore here). We expand $x$ as a power series on $\epsilon$:
+We introduce a tuning parameter ϵ into our equation: 𝑥⁵ + 𝑥 = 1. If ϵ = 1, we get our original problem. For ϵ = 0, the problem transforms to an easy one: 𝑥⁵ = 1 which has a solution 𝑥 = 1 (and four complex solutions which we ignore here). We expand 𝑥 as a power series on ϵ:
 
-$$
-  x(\epsilon) = a_0 + a_1 \epsilon + a_2 \epsilon^2 + O(\epsilon^3)
-$$
+𝑥(ϵ) = 𝑎₀ + 𝑎₁ϵ + 𝑎₂ϵ² + 𝑂(ϵ³)
 
-$a_0$ is the solution of the easy equation, therefore $a_0 = 1$.
+𝑎₀ is the solution of the easy equation, therefore 𝑎₀ = 1. Substituting into the original problem,
 
-Substituting in the original problem,
+(1 + 𝑎₁ϵ + 𝑎₂ϵ²)⁵ + ϵ (1 + 𝑎₁ϵ + 𝑎₂ϵ²) - 1 = 0
 
-$$
-  (1 + a_1 \epsilon + a_2 \epsilon^2)^5 + \epsilon (1 + a_1 \epsilon + x_a \epsilon^2) - 1 = 0
-$$
 
 Expanding the equations, we get
 
-$$
-  \epsilon (1 + 5a_1) + \epsilon^2 (a_1 + 5 a_2 + 10 a_1^2) + O(\epsilon^3) = 0
-$$
+ϵ (1 + 5𝑎₁) + ϵ² (𝑎₁ + 5𝑎₂ + 10𝑎₁²) + 𝑂(ϵ³) = 0
 
-This equation should hold for each power of $\epsilon$,
+This equation should hold for each power of ϵ,
 
-$$
-  1 + 5a_1 = 0
-  \,,
-$$
+1 + 5𝑎₁ = 0,
 
 and
 
-$$
-  a_1 + 5 a_2 + 10 a_1^2 = 0
-  \,.
-$$
+𝑎₁ + 5𝑎₂ + 10𝑎₁² = 0.
 
-We solve the first equation to get $a_1 = -\frac{1}{5}$. Substituting in the second one and solve for $a_2$:
 
-$$
-  a_2 = -\frac{ -\frac{1}{5} + 10 (-\frac{1}{5})^2 }{5} = -\frac{1}{25}
-$$
+We solve the first equation to get 𝑎₁ = -1/5. Substituting in the second one and solve for 𝑎₂:
+
+𝑎₂ = (-1/5 + 10(-(1/5)²) / 5 = -1/25
 
 Finally,
 
-$$
-  x(\epsilon) = 1 -\frac{1}{5} \epsilon - \frac{1}{25}\epsilon^2 + + O(\epsilon^3)
-$$
+𝑥(ϵ) = 1 - ϵ / 5 - ϵ² / 25 + 𝑂(ϵ³)
 
-Solving the original problem, $x(1) = 0.76$, compared to 0.75487767 calculated numerically. We can improve the accuracy by including more terms in the expansion of $x$. However, the calculations, while straightforward, become messy and intractable for do manually very quickly. This is why a CAS is very helpful to solve perturbation problems. So, let's see how we can do these calculations in Julia (`test_quintic` function).
+
+Solving the original problem, 𝑥(1) = 0.76, compared to 0.75487767 calculated numerically. We can improve the accuracy by including more terms in the expansion of 𝑥. However, the calculations, while straightforward, become messy and intractable for do manually very quickly. This is why a CAS is very helpful to solve perturbation problems. So, let's see how we can do these calculations in Julia (`test_quintic` function).
 
 Let `n = 2` be the order of the expansion. We start by defining the variables:
 
@@ -94,7 +74,7 @@ Let `n = 2` be the order of the expansion. We start by defining the variables:
   @variables @variables ϵ a[1:n]        
 ```
 
-Then, we define `x = 1 + a[1]*ϵ + a[2]*ϵ^2`. Note that in `test_quintic` we use the helper function `def_taylor` to define `x` by calling it as `x = def_taylor(ϵ, a, 1)`. The next step is to substitute $x$ is the problem `y = x^5 + ϵ*x - 1`. Now, `y` is
+Then, we define `x = 1 + a[1]*ϵ + a[2]*ϵ^2`. Note that in `test_quintic` we use the helper function `def_taylor` to define `x` by calling it as `x = def_taylor(ϵ, a, 1)`. The next step is to substitute 𝑥 is the problem `y = x^5 + ϵ*x - 1`. Now, `y` is
 
 ```Julia
   ϵ*(1 + a₁*ϵ + a₂*(ϵ^2)) + (1 + a₁*ϵ + a₂*(ϵ^2))^5 - 1
@@ -111,7 +91,7 @@ Or in the expanded form (calculated as `expand(y)`):
 10(a₁^3)*(a₂^2)*(ϵ^7)
 ```
 
-We need a way to get the coefficients of different powers of $\epsilon$. Function `collect_powers(eq, x, ns)` returns the powers of `x` in expression `eq`. Argument `ns` is the range of the powers.
+We need a way to get the coefficients of different powers of ϵ. Function `collect_powers(eq, x, ns)` returns the powers of `x` in expression `eq`. Argument `ns` is the range of the powers.
 
 ```Julia
 function collect_powers(eq, x, ns; max_power=100)
@@ -177,28 +157,22 @@ The two functions `collect_powers` and `solve_coef(eqs, a)` are used in all the 
 
 Historically, the perturbation methods were first invented to solve orbital calculations needed to calculate the orbit of the moon and planets. In homage to this history, our second example has a celestial theme. Our goal is solve the Kepler's equation:
 
-$$
-  E - e \sin(E) = M
-  \,,
-$$
+𝐸 - 𝑒 sin(𝐸) = 𝑀.  
 
-where $e$ is the *eccentricity* of the elliptical orbit, $M$ is the *mean anomaly*, and $E$ (unknown) is the *eccentric anomaly* (the angle between the position of a planet in an elliptical orbit and the point of periapsis). We want to find a function $E(M; e)$. As the first example, it is easy to solve this problem using the Newton's method. For example, let $e = 0.01671$ (the eccentricity of the Earth) and $M=\pi / 2$. We have `solve_newton(x - e*sin(x) - M, x, M)` equals to 1.5875 (compared to $\pi/2 = 1.5708$). Now, we try to solve the same problem using the perturbation techniques (see function `test_kepler`.
+where 𝑒 is the *eccentricity* of the elliptical orbit, 𝑀 is the *mean anomaly*, and 𝐸 (unknown) is the *eccentric anomaly* (the angle between the position of a planet in an elliptical orbit and the point of periapsis). We want to find a function 𝐸(𝑀; 𝑒). As the first example, it is easy to solve this problem using the Newton's method. For example, let 𝑒 = 0.01671 (the eccentricity of the Earth) and 𝑀 = π/2. We have `solve_newton(x - e*sin(x) - M, x, M)` equals to 1.5875 (compared to π/2 = 1.5708). Now, we try to solve the same problem using the perturbation techniques (see function `test_kepler`.
 
-For $e = 0$, $E = M$. Therefore, we can use $e$ as our perturbation parameter. For consistency, we rename it to $\epsilon$. We start by defining the variables and $x$ (assuming `n = 3`):
+For 𝑒 = 0, 𝐸 = 𝑀. Therefore, we can use 𝑒 as our perturbation parameter. For consistency, we rename it to ϵ. We start by defining the variables and 𝑥 (assuming `n = 3`):
 
 ```julia
   @variables ϵ M a[1:n]
   x = def_taylor(ϵ, n, M)  
 ```
 
-The problem equation is `y = E - \epsilon * sin(E) - M`. We further simplify by substituting $\sin$ with its power series (using `expand_sin` helper function):
+The problem equation is `y = E - ϵ * sin(E) - M`. We further simplify by substituting sin with its power series (using `expand_sin` helper function):
 
-$$
-  \sin(E) = x - \frac{x^3}{6} + \frac{x^5}{120} - \frac{x^7}{5040} + O(x^9)
-  \,.
-$$
+sin(𝐸) = 𝑥 - 𝑥³ / 6 + 𝑥⁵ / 120 - 𝑥⁷ / 5040 + 𝑂(𝑥⁹).
 
-We follow the same algorithm as before. We collect the coefficients of the powers of $\epsilon$:
+We follow the same algorithm as before. We collect the coefficients of the powers of ϵ:
 
 ```
   eqs = collect_powers(y, ϵ, 1:n)
@@ -227,13 +201,8 @@ The result is 1.5876, compared to the numerical value of 1.5875. It is customary
     + (ϵ + 16*ϵ^2 + 91*ϵ^3)*M^5/120
 ```
 
-Comparing the formula to the one for $E$ in the [Wikipedia article on the Kepler's equation](https://en.wikipedia.org/wiki/Kepler%27s_equation):
+Comparing the formula to the one for 𝐸 in the [Wikipedia article on the Kepler's equation](https://en.wikipedia.org/wiki/Kepler%27s_equation):
 
-$$
-  E = \frac{1}{1-\epsilon}M
-  - \frac{\epsilon}{(1-\epsilon)^4} \frac{M^3}{3!}
-  + \frac{(9\epsilon^2 + \epsilon)}{(1-\epsilon)^7} \frac{M^5}{5!}
-  + \cdots
-$$
+<img src="https://render.githubusercontent.com/render/math?math=E = \frac{1}{1-\epsilon}M-\frac{\epsilon}{(1-\epsilon)^4} \frac{M^3}{3!} %2B \frac{(9\epsilon^2 %2B  \epsilon)}{(1-\epsilon)^7}\frac{M^5}{5!}\cdots">
 
-The first deviation is in the coefficient of $\epsilon^3 M^5$.
+The first deviation is in the coefficient of ϵ³𝑀⁵.
