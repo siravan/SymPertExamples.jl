@@ -233,9 +233,4 @@ $$
 
 The first deviation is in the coefficient of $\epsilon^3 M^5$.
 
-<img src="https://render.githubusercontent.com/render/math?math=
-  E = \frac{1}{1-\epsilon}M
-  - \frac{\epsilon}{(1-\epsilon)^4} \frac{M^3}{3!}
-  + \frac{(9\epsilon^2 + \epsilon)}{(1-\epsilon)^7} \frac{M^5}{5!}
-  \cdots 
-">
+<img src="https://render.githubusercontent.com/render/math?math=E = \frac{1}{1-\epsilon}M-\frac{\epsilon}{(1-\epsilon)^4} \frac{M^3}{3!} %2B \frac{(9\epsilon^2 %2B  \epsilon)}{(1-\epsilon)^7}\frac{M^5}{5!}\cdots">
