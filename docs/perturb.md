@@ -4,7 +4,7 @@
 
 [**Symbolics.jl**](https://github.com/JuliaSymbolics/Symbolics.jl) is a fast and modern Computer Algebra System (CAS) written in Julia Programming Language. It is part of the [SciML](https://sciml.ai/) ecosystem of differential equation solvers and scientific machine learning packages. While **Symbolics.jl** is primarily designed for modern scientific computing (e.g., machine learning), it is a powerful CAS and can be useful in *classic* scientific computing, like *perturbation* problems.
 
-Perturbation methods are a collection of techniques to solve algebraic and differential equations. The target problems generally don't have a closed solution. However, they depend on a tunable parameter and have closed-form or easy solutions for some values of the parameter. The main idea is to assume a solution as a power series in the tunable parameter (say ϵ), such that ϵ = 0 corresponds to a closed solution.
+Perturbation methods are a collection of techniques to solve algebraic and differential equations. The target problems generally don't have a closed solution. However, they depend on a tunable parameter and have closed-form or easy solutions for some values of the parameter. The main idea is to assume a solution as a power series in the tunable parameter (say 𝜀), such that 𝜀 = 0 corresponds to a closed solution.
 
 We will discuss the general steps of the perturbation methods in four examples below. One hallmark of the perturbation method is the generation of long and involved intermediate equations, which are subjected to algorithmic and mechanical manipulations. Therefore, these problems are well suited for CAS. In fact, CAS softwares have been used to help with the perturbation calculations since the 1950s.
 
@@ -35,20 +35,20 @@ In this code, `Symbolics.derivative(eq, x)` does exactly what it names implies: 
 
 Let's go back to our quintic. We can define a Symbolics variable as `@variables x` and then solve the equation as `solve_newton(x^5 + x - 1, x, 1.0)` (here, `x₀ = 0` is our first guess). The answer is `x = 0.7549`. Now, let's see how we can solve this problem using the perturbation method.
 
-We introduce a tuning parameter ϵ into our equation: 𝑥⁵ + 𝑥 = 1. If ϵ = 1, we get our original problem. For ϵ = 0, the problem transforms to an easy one: 𝑥⁵ = 1 which has a solution 𝑥 = 1 (and four complex solutions which we ignore here). We expand 𝑥 as a power series on ϵ:
+We introduce a tuning parameter 𝜀 into our equation: 𝑥⁵ + 𝑥 = 1. If 𝜀 = 1, we get our original problem. For 𝜀 = 0, the problem transforms to an easy one: 𝑥⁵ = 1 which has a solution 𝑥 = 1 (and four complex solutions which we ignore here). We expand 𝑥 as a power series on 𝜀:
 
-𝑥(ϵ) = 𝑎₀ + 𝑎₁ϵ + 𝑎₂ϵ² + 𝑂(ϵ³)
+𝑥(𝜀) = 𝑎₀ + 𝑎₁𝜀 + 𝑎₂𝜀² + 𝑂(𝜀³)
 
 𝑎₀ is the solution of the easy equation, therefore 𝑎₀ = 1. Substituting into the original problem,
 
-(1 + 𝑎₁ϵ + 𝑎₂ϵ²)⁵ + ϵ (1 + 𝑎₁ϵ + 𝑎₂ϵ²) - 1 = 0
+(1 + 𝑎₁𝜀 + 𝑎₂𝜀²)⁵ + 𝜀 (1 + 𝑎₁𝜀 + 𝑎₂𝜀²) - 1 = 0
 
 
 Expanding the equations, we get
 
-ϵ (1 + 5𝑎₁) + ϵ² (𝑎₁ + 5𝑎₂ + 10𝑎₁²) + 𝑂(ϵ³) = 0
+𝜀 (1 + 5𝑎₁) + 𝜀² (𝑎₁ + 5𝑎₂ + 10𝑎₁²) + 𝑂(𝜀³) = 0
 
-This equation should hold for each power of ϵ,
+This equation should hold for each power of 𝜀,
 
 1 + 5𝑎₁ = 0,
 
@@ -63,7 +63,7 @@ We solve the first equation to get 𝑎₁ = -1/5. Substituting in the second on
 
 Finally,
 
-𝑥(ϵ) = 1 - ϵ / 5 - ϵ² / 25 + 𝑂(ϵ³)
+𝑥(𝜀) = 1 - 𝜀 / 5 - 𝜀² / 25 + 𝑂(𝜀³)
 
 
 Solving the original problem, 𝑥(1) = 0.76, compared to 0.75487767 calculated numerically. We can improve the accuracy by including more terms in the expansion of 𝑥. However, the calculations, while straightforward, become messy and intractable for do manually very quickly. This is why a CAS is very helpful to solve perturbation problems. So, let's see how we can do these calculations in Julia (`test_quintic` function).
@@ -71,27 +71,27 @@ Solving the original problem, 𝑥(1) = 0.76, compared to 0.75487767 calculated 
 Let `n = 2` be the order of the expansion. We start by defining the variables:
 
 ```Julia
-  @variables @variables ϵ a[1:n]        
+  @variables @variables 𝜀 a[1:n]        
 ```
 
-Then, we define `x = 1 + a[1]*ϵ + a[2]*ϵ^2`. Note that in `test_quintic` we use the helper function `def_taylor` to define `x` by calling it as `x = def_taylor(ϵ, a, 1)`. The next step is to substitute 𝑥 is the problem `y = x^5 + ϵ*x - 1`. Now, `y` is
+Then, we define `x = 1 + a[1]*𝜀 + a[2]*𝜀^2`. Note that in `test_quintic` we use the helper function `def_taylor` to define `x` by calling it as `x = def_taylor(𝜀, a, 1)`. The next step is to substitute 𝑥 is the problem `y = x^5 + 𝜀*x - 1`. Now, `y` is
 
 ```Julia
-  ϵ*(1 + a₁*ϵ + a₂*(ϵ^2)) + (1 + a₁*ϵ + a₂*(ϵ^2))^5 - 1
+  𝜀*(1 + a₁*𝜀 + a₂*(𝜀^2)) + (1 + a₁*𝜀 + a₂*(𝜀^2))^5 - 1
 ```
 
 Or in the expanded form (calculated as `expand(y)`):
 
 ```Julia
-ϵ + a₁*(ϵ^2) + a₂*(ϵ^3) + (a₁^5)*(ϵ^5) + (a₂^5)*(ϵ^10) + 5a₁*ϵ + 5a₂*(ϵ^2) +
-10(a₁^2)*(ϵ^2) + 10(a₁^3)*(ϵ^3) + 5(a₁^4)*(ϵ^4) + 10(a₂^2)*(ϵ^4) +
-10(a₂^3)*(ϵ^6) + 5(a₂^4)*(ϵ^8) + 20a₁*a₂*(ϵ^3) + 30a₁*(a₂^2)*(ϵ^5) +
-20a₁*(a₂^3)*(ϵ^7) + 5a₁*(a₂^4)*(ϵ^9) + 30a₂*(a₁^2)*(ϵ^4) + 20a₂*(a₁^3)*(ϵ^5) +
-5a₂*(a₁^4)*(ϵ^6) + 30(a₁^2)*(a₂^2)*(ϵ^6) + 10(a₁^2)*(a₂^3)*(ϵ^8) +
-10(a₁^3)*(a₂^2)*(ϵ^7)
+𝜀 + a₁*(𝜀^2) + a₂*(𝜀^3) + (a₁^5)*(𝜀^5) + (a₂^5)*(𝜀^10) + 5a₁*𝜀 + 5a₂*(𝜀^2) +
+10(a₁^2)*(𝜀^2) + 10(a₁^3)*(𝜀^3) + 5(a₁^4)*(𝜀^4) + 10(a₂^2)*(𝜀^4) +
+10(a₂^3)*(𝜀^6) + 5(a₂^4)*(𝜀^8) + 20a₁*a₂*(𝜀^3) + 30a₁*(a₂^2)*(𝜀^5) +
+20a₁*(a₂^3)*(𝜀^7) + 5a₁*(a₂^4)*(𝜀^9) + 30a₂*(a₁^2)*(𝜀^4) + 20a₂*(a₁^3)*(𝜀^5) +
+5a₂*(a₁^4)*(𝜀^6) + 30(a₁^2)*(a₂^2)*(𝜀^6) + 10(a₁^2)*(a₂^3)*(𝜀^8) +
+10(a₁^3)*(a₂^2)*(𝜀^7)
 ```
 
-We need a way to get the coefficients of different powers of ϵ. Function `collect_powers(eq, x, ns)` returns the powers of `x` in expression `eq`. Argument `ns` is the range of the powers.
+We need a way to get the coefficients of different powers of 𝜀. Function `collect_powers(eq, x, ns)` returns the powers of `x` in expression `eq`. Argument `ns` is the range of the powers.
 
 ```Julia
 function collect_powers(eq, x, ns; max_power=100)
@@ -106,22 +106,22 @@ function collect_powers(eq, x, ns; max_power=100)
 end
 ```
 
-For example, `collect_powers(y, ϵ, 1:2)` returns `eqs = [1 + 5a₁, a₁ + 5a₂ + 10(a₁^2)]`. `collect_powers` uses `substitute` to find the coefficient of a given power of `x` by passing a `Dict` with all powers of `x` set to 0, except the target power which is set to 1. To find the coefficient of `ϵ^2` in `y`, we can write
+For example, `collect_powers(y, 𝜀, 1:2)` returns `eqs = [1 + 5a₁, a₁ + 5a₂ + 10(a₁^2)]`. `collect_powers` uses `substitute` to find the coefficient of a given power of `x` by passing a `Dict` with all powers of `x` set to 0, except the target power which is set to 1. To find the coefficient of `𝜀^2` in `y`, we can write
 
 ```julia
   substitute(expand(y), Dict(
-    ϵ => 0,
-    ϵ^2 => 1,
-    ϵ^3 => 0,
-    ϵ^4 => 0,
-    ϵ^5 => 0,
-    ϵ^6 => 0,
-    ϵ^7 => 0,
-    ϵ^8 => 0)
+    𝜀 => 0,
+    𝜀^2 => 1,
+    𝜀^3 => 0,
+    𝜀^4 => 0,
+    𝜀^5 => 0,
+    𝜀^6 => 0,
+    𝜀^7 => 0,
+    𝜀^8 => 0)
   )
 ```
 
-The next step is find the coefficients of `ϵ` in the expansion of `x`. **Symbolics.jl** has a function `Symbolics.solve_for` that can solve systems of linear equations. The system described by `eqs` does not seem linear (note `10(a₁^2)` in `eqs[2]`), but upon closer inspection is found to be in fact linear (this is a feature of the permutation method). We can start by solving `eqs[1]` for `a₁` and then substitute it in `eqs[2]` and solve for `a₂`.  This process is done by function `solve_coef(eqs, ps)`:
+The next step is find the coefficients of `𝜀` in the expansion of `x`. **Symbolics.jl** has a function `Symbolics.solve_for` that can solve systems of linear equations. The system described by `eqs` does not seem linear (note `10(a₁^2)` in `eqs[2]`), but upon closer inspection is found to be in fact linear (this is a feature of the permutation method). We can start by solving `eqs[1]` for `a₁` and then substitute it in `eqs[2]` and solve for `a₂`.  This process is done by function `solve_coef(eqs, ps)`:
 
 ```julia
 function solve_coef(eqs, ps)
@@ -161,21 +161,21 @@ Historically, the perturbation methods were first invented to solve orbital calc
 
 where 𝑒 is the *eccentricity* of the elliptical orbit, 𝑀 is the *mean anomaly*, and 𝐸 (unknown) is the *eccentric anomaly* (the angle between the position of a planet in an elliptical orbit and the point of periapsis). We want to find a function 𝐸(𝑀; 𝑒). As the first example, it is easy to solve this problem using the Newton's method. For example, let 𝑒 = 0.01671 (the eccentricity of the Earth) and 𝑀 = π/2. We have `solve_newton(x - e*sin(x) - M, x, M)` equals to 1.5875 (compared to π/2 = 1.5708). Now, we try to solve the same problem using the perturbation techniques (see function `test_kepler`.
 
-For 𝑒 = 0, 𝐸 = 𝑀. Therefore, we can use 𝑒 as our perturbation parameter. For consistency, we rename it to ϵ. We start by defining the variables and 𝑥 (assuming `n = 3`):
+For 𝑒 = 0, 𝐸 = 𝑀. Therefore, we can use 𝑒 as our perturbation parameter. For consistency, we rename it to 𝜀. We start by defining the variables and 𝑥 (assuming `n = 3`):
 
 ```julia
-  @variables ϵ M a[1:n]
-  x = def_taylor(ϵ, n, M)  
+  @variables 𝜀 M a[1:n]
+  x = def_taylor(𝜀, n, M)  
 ```
 
-The problem equation is `y = E - ϵ * sin(E) - M`. We further simplify by substituting sin with its power series (using `expand_sin` helper function):
+The problem equation is `y = E - 𝜀 * sin(E) - M`. We further simplify by substituting sin with its power series (using `expand_sin` helper function):
 
 sin(𝐸) = 𝑥 - 𝑥³ / 6 + 𝑥⁵ / 120 - 𝑥⁷ / 5040 + 𝑂(𝑥⁹).
 
-We follow the same algorithm as before. We collect the coefficients of the powers of ϵ:
+We follow the same algorithm as before. We collect the coefficients of the powers of 𝜀:
 
 ```
-  eqs = collect_powers(y, ϵ, 1:n)
+  eqs = collect_powers(y, 𝜀, 1:n)
 ```
 
 and then solve for `a`:
@@ -188,21 +188,21 @@ Finally, we substitute `vals` back in `x` to get a formula to calculate `E`:
 
 ```
   sol = substitute(x, vals)
-  substitute(sol, Dict(ϵ => 0.01671, M => π/2))
+  substitute(sol, Dict(𝜀 => 0.01671, M => π/2))
 ```
 
-The result is 1.5876, compared to the numerical value of 1.5875. It is customary to order `sol` based on the powers of `M` instead of `ϵ`. We can calculate this series as `collect_powers(sol, M, 0:3)
+The result is 1.5876, compared to the numerical value of 1.5875. It is customary to order `sol` based on the powers of `M` instead of `𝜀`. We can calculate this series as `collect_powers(sol, M, 0:3)
 `. The result (after cleanup) is
 
 ```julia
-  E(M, ϵ) =
-    (1 + ϵ + ϵ^2 + ϵ^3)*M
-    - (ϵ + 4*ϵ^2 + 10*ϵ^3)*M^3/6
-    + (ϵ + 16*ϵ^2 + 91*ϵ^3)*M^5/120
+  E(M, 𝜀) =
+    (1 + 𝜀 + 𝜀^2 + 𝜀^3)*M
+    - (𝜀 + 4*𝜀^2 + 10*𝜀^3)*M^3/6
+    + (𝜀 + 16*𝜀^2 + 91*𝜀^3)*M^5/120
 ```
 
 Comparing the formula to the one for 𝐸 in the [Wikipedia article on the Kepler's equation](https://en.wikipedia.org/wiki/Kepler%27s_equation):
 
 <img src="https://render.githubusercontent.com/render/math?math=E = \frac{1}{1-\epsilon}M-\frac{\epsilon}{(1-\epsilon)^4} \frac{M^3}{3!} %2B \frac{(9\epsilon^2 %2B  \epsilon)}{(1-\epsilon)^7}\frac{M^5}{5!}\cdots">
 
-The first deviation is in the coefficient of ϵ³𝑀⁵.
+The first deviation is in the coefficient of 𝜀³𝑀⁵.
