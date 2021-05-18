@@ -38,7 +38,7 @@ Let's go back to our quintic. We can define a Symbolics variable as `@variables 
 We introduce a tuning parameter $\epsilon$ into our equation: $x^5 + \epsilon x = 1$. If $\epsilon = 1$, we get our original problem. For $\epsilon = 0$, the problem transforms to an easy one: $x^5 = 1$ which has a solution $x = 1$ (and four complex solutions which we ignore here). We expand $x$ as a power series on $\epsilon$:
 
 
-<img src="https://render.githubusercontent.com/render/math?math=x(\epsilon) = a_0 + a_1 \epsilon + a_2 \epsilon^2 + O(\epsilon^3)">
+<img src="https://render.githubusercontent.com/render/math?math=x(\epsilon) = a_0 %2B a_1 \epsilon %2B a_2 \epsilon^2 %2B O(\epsilon^3)">
 
 $a_0$ is the solution of the easy equation, therefore $a_0 = 1$.
 
