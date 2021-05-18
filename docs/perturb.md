@@ -35,9 +35,11 @@ In this code, `Symbolics.derivative(eq, x)` does exactly what it names implies: 
 
 Let's go back to our quintic. We can define a Symbolics variable as `@variables x` and then solve the equation as `solve_newton(x^5 + x - 1, x, 1.0)` (here, `x₀ = 0` is our first guess). The answer is `x = 0.7549`. Now, let's see how we can solve this problem using the perturbation method.
 
-We introduce a tuning parameter $\epsilon$ into our equation: *x*⁵ + *ϵx* = 1. If $\epsilon = 1$, we get our original problem. For $\epsilon = 0$, the problem transforms to an easy one: $x^5 = 1$ which has a solution $x = 1$ (and four complex solutions which we ignore here). We expand $x$ as a power series on $\epsilon$:
+We introduce a tuning parameter $\epsilon$ into our equation: *x*⁵ + *ϵx* = 1. If *ϵ* = 1, we get our original problem. For *ϵ* = 0, the problem transforms to an easy one: *x*⁵ + *ϵx* = 1 which has a solution *x* = 1 (and four complex solutions which we ignore here). We expand *x* as a power series on *ϵ*:
 
+*x*(*ϵ*) = a₀ + 
 
+*a₀ + ϵa₁ + *ϵ²a₂ + O(ϵ³)*
 <img src="https://render.githubusercontent.com/render/math?math=x(\epsilon) = a_0 %2B a_1 \epsilon %2B a_2 \epsilon^2 %2B O(\epsilon^3)">
 
 $a_0$ is the solution of the easy equation, therefore $a_0 = 1$.
