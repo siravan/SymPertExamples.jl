@@ -2,17 +2,17 @@
 
 ## Background
 
-[**Symbolics.jl**](https://github.com/JuliaSymbolics/Symbolics.jl) is a fast and modern Computer Algebra System (CAS) written in Julia Programming Language. It is part of the [SciML](https://sciml.ai/) ecosystem of differential equation solvers and scientific machine learning packages. While **Symbolics.jl** is primarily designed for modern scientific computing (e.g., machine learning), it is a powerful CAS and can be useful in *classic* scientific computing, like *perturbation* problems.
+[**Symbolics.jl**](https://github.com/JuliaSymbolics/Symbolics.jl) is a fast and modern Computer Algebra System (CAS) written in the Julia Programming Language. It is an integral part of the [SciML](https://sciml.ai/) ecosystem of differential equation solvers and scientific machine learning packages. While **Symbolics.jl** is primarily designed for modern scientific computing (e.g., auto-differentiation, machine learning), it is a powerful CAS and can also be useful for *classic* scientific computing. One such application is using the *perturbation* theory to solve algebraic and differential equations.
 
-Perturbation methods are a collection of techniques to solve algebraic and differential equations. The target problems generally don't have a closed solution. However, they depend on a tunable parameter and have closed-form or easy solutions for some values of the parameter. The main idea is to assume a solution as a power series in the tunable parameter (say 𝜀), such that 𝜀 = 0 corresponds to a closed solution.
+Perturbation methods are a collection of techniques to solve problems that generally don't have a closed solution but depend on a tunable parameter and have closed-form or easy solutions for some values of the parameter. The main idea is to assume a solution as a power series in the tunable parameter (say 𝜀), such that 𝜀 = 0 corresponds to an easy solution.
 
-We will discuss the general steps of the perturbation methods in four examples below. One hallmark of the perturbation method is the generation of long and involved intermediate equations, which are subjected to algorithmic and mechanical manipulations. Therefore, these problems are well suited for CAS. In fact, CAS softwares have been used to help with the perturbation calculations since the 1950s.
+We will discuss the general steps of the perturbation methods in four examples below. One hallmark of the perturbation method is the generation of long and convoluted intermediate equations, which are subjected to algorithmic and mechanical manipulations. Therefore, these problems are well suited for CAS. In fact, CAS softwares have been used to help with the perturbation calculations since the 1950s.
 
-In this tutorial our goal is to show how to use Julia and **Symbolics.jl** to solve simple perturbation problems.
+In this tutorial our goal is to show how to use Julia and **Symbolics.jl** to solve simple perturbation problems. The code for the for examples (`test_*` functions) and the helper functions are in `src/perturb.jl`.
 
 ## Solving the Quintic
 
-We start with the "hello world!" analog of the perturbation problems: solving the quintic (fifth-order) equations. We want to find 𝑥 such that 𝑥⁵ + 𝑥 = 1. According to the Abel's theorem, a general quintic equation does not have a closed form solution. Of course, we can easily solve this equation numerically; for example, using the Newton's method. Here, we use the following implementation of the Newton's method:
+We start with the "hello world!" analog of the perturbation problems: solving the quintic (fifth-order) equations. We want to find a real valued 𝑥 such that 𝑥⁵ + 𝑥 = 1. According to the Abel's theorem, a general quintic equation does not have a closed form solution. Of course, we can easily solve this equation numerically; for example, by using the Newton's method. We use the following implementation of the Newton's method:
 
 ```Julia
 using Symbolics, SymbolicUtils
@@ -33,9 +33,9 @@ function solve_newton(f, x, x₀; abstol=1e-8, maxiter=50)
 end
 ```
 
-In this code, `Symbolics.derivative(eq, x)` does exactly what it names implies: it calculates the symbolic derivative of `eq` (a **Symbolics.jl** expression) with respect to `x` (a **Symbolics.jl** variable). We use `Symbolics.substitute(eq, D)` to evaluate the update formula by substituting variables or sub-expressions (defined as a dictionary `D`) in `eq`. It should be noted that `substitute` is the workhorse of our code and will be used multiple times in the rest of this tutorial. `solve_newton` is written with simplicity and clarity in mind and not performance.
+In this code, `Symbolics.derivative(eq, x)` does exactly what it names implies: it calculates the symbolic derivative of `eq` (a **Symbolics.jl** expression) with respect to `x` (a **Symbolics.jl** variable). We use `Symbolics.substitute(eq, D)` to evaluate the update formula by substituting variables or sub-expressions (defined as a dictionary `D`) in `eq`. It should be noted that `substitute` is the workhorse of our code and will be used multiple times in the rest of this tutorial. `solve_newton` is written with simplicity and clarity in mind and not performance but suffices for our purpose.
 
-Let's go back to our quintic. We can define a Symbolics variable as `@variables x` and then solve the equation as `solve_newton(x^5 + x - 1, x, 1.0)` (here, `x₀ = 0` is our first guess). The answer is `x = 0.7549`. Now, let's see how we can solve this problem using the perturbation method.
+Let's go back to our quintic. We can define a Symbolics variable as `@variables x` and then solve the equation `solve_newton(x^5 + x - 1, x, 1.0)` (here, `x₀ = 0` is our first guess). The answer is `x = 0.7549`. Now, let's see how we can solve this problem using the perturbation method.
 
 We introduce a tuning parameter 𝜀 into our equation: 𝑥⁵ + 𝑥 = 1. If 𝜀 = 1, we get our original problem. For 𝜀 = 0, the problem transforms to an easy one: 𝑥⁵ = 1 which has a solution 𝑥 = 1 (and four complex solutions which we ignore here). We expand 𝑥 as a power series on 𝜀:
 
@@ -50,7 +50,7 @@ Expanding the equations, we get
 
 𝜀 (1 + 5𝑎₁) + 𝜀² (𝑎₁ + 5𝑎₂ + 10𝑎₁²) + 𝑂(𝜀³) = 0
 
-This equation should hold for each power of 𝜀,
+This equation should hold for each power of 𝜀. Therefore,
 
 1 + 5𝑎₁ = 0,
 
@@ -58,8 +58,7 @@ and
 
 𝑎₁ + 5𝑎₂ + 10𝑎₁² = 0.
 
-
-We solve the first equation to get 𝑎₁ = -1/5. Substituting in the second one and solve for 𝑎₂:
+This system of equations does not initially seem to be linear because of the presence of terms like 10𝑎₁², but upon closer inspection is found to be in fact linear (this is a feature of the permutation method). In addition, the system is in a triangular form, meaning the first equation depends only on 𝑎₁, the second one on 𝑎₁ and 𝑎₂, such that we can replace the result of 𝑎₁ from the first one into the second equation and remove the non-linear term. We solve the first equation to get 𝑎₁ = -1/5. Substituting in the second one and solve for 𝑎₂:
 
 𝑎₂ = (-1/5 + 10(-(1/5)²) / 5 = -1/25
 
@@ -67,22 +66,21 @@ Finally,
 
 𝑥(𝜀) = 1 - 𝜀 / 5 - 𝜀² / 25 + 𝑂(𝜀³)
 
+Solving the original problem, 𝑥(1) = 0.76, compared to 0.75487767 calculated numerically. We can improve the accuracy by including more terms in the expansion of 𝑥. However, the calculations, while straightforward, become messy and intractable to do manually very quickly. This is why a CAS is very helpful to solve perturbation problems.
 
-Solving the original problem, 𝑥(1) = 0.76, compared to 0.75487767 calculated numerically. We can improve the accuracy by including more terms in the expansion of 𝑥. However, the calculations, while straightforward, become messy and intractable for do manually very quickly. This is why a CAS is very helpful to solve perturbation problems. So, let's see how we can do these calculations in Julia (`test_quintic` function).
-
-Let `n = 2` be the order of the expansion. We start by defining the variables:
+Now, let's see how we can do these calculations in Julia (see `test_quintic` function). Let `n = 2` be the order of the expansion. We start by defining the symbolic variables:
 
 ```Julia
   @variables @variables ϵ a[1:n]        
 ```
 
-Then, we define `x = 1 + a[1]*ϵ + a[2]*ϵ^2`. Note that in `test_quintic` we use the helper function `def_taylor` to define `x` by calling it as `x = def_taylor(ϵ, a, 1)`. The next step is to substitute 𝑥 is the problem `y = x^5 + ϵ*x - 1`. Now, `y` is
+Then, we define `x = 1 + a[1]*ϵ + a[2]*ϵ^2`. Note that in `test_quintic` we use the helper function `def_taylor` to define `x` by calling it as `x = def_taylor(ϵ, a, 1)`, where the arguments are the expansion variable, an array of parameters, and the constant term. The next step is to substitute `x` in the problem equation `eq = x^5 + ϵ*x - 1`. Now, `eq` is
 
 ```Julia
   ϵ*(1 + a₁*ϵ + a₂*(ϵ^2)) + (1 + a₁*ϵ + a₂*(ϵ^2))^5 - 1
 ```
 
-Or in the expanded form (calculated as `expand(y)`):
+Or in the expanded form (calculated as `expand(eq)`):
 
 ```Julia
 ϵ + a₁*(ϵ^2) + a₂*(ϵ^3) + (a₁^5)*(ϵ^5) + (a₂^5)*(ϵ^10) + 5a₁*ϵ + 5a₂*(ϵ^2) +
@@ -93,7 +91,7 @@ Or in the expanded form (calculated as `expand(y)`):
 10(a₁^3)*(a₂^2)*(ϵ^7)
 ```
 
-We need a way to get the coefficients of different powers of 𝜀. Function `collect_powers(eq, x, ns)` returns the powers of `x` in expression `eq`. Argument `ns` is the range of the powers.
+We need a way to get the coefficients of different powers of 𝜀. Function `collect_powers(eq, x, ns)` returns the powers of variable `x` in expression `eq`. Argument `ns` is the range of the powers.
 
 ```Julia
 function collect_powers(eq, x, ns; max_power=100)
@@ -108,10 +106,12 @@ function collect_powers(eq, x, ns; max_power=100)
 end
 ```
 
-For example, `collect_powers(y, ϵ, 1:2)` returns `eqs = [1 + 5a₁, a₁ + 5a₂ + 10(a₁^2)]`. `collect_powers` uses `substitute` to find the coefficient of a given power of `x` by passing a `Dict` with all powers of `x` set to 0, except the target power which is set to 1. To find the coefficient of `ϵ^2` in `y`, we can write
+For example, `collect_powers(eq, ϵ, 1:2)` means the coefficients of `ϵ` and `ϵ^2` in `eq` and returns a list of expressions `[1 + 5a₁, a₁ + 5a₂ + 10(a₁^2)]`. We assign this list to `eqs`.
+
+`collect_powers` uses `substitute` to find the coefficient of a given power of `x` by passing a `Dict` with all powers of `x` set to 0, except the target power which is set to 1. The following experssion returns the coefficient of `ϵ^2` in `eq`,
 
 ```julia
-  substitute(expand(y), Dict(
+  substitute(expand(eq), Dict(
     ϵ => 0,
     ϵ^2 => 1,
     ϵ^3 => 0,
@@ -123,7 +123,7 @@ For example, `collect_powers(y, ϵ, 1:2)` returns `eqs = [1 + 5a₁, a₁ + 5a�
   )
 ```
 
-The next step is find the coefficients of `ϵ` in the expansion of `x`. **Symbolics.jl** has a function `Symbolics.solve_for` that can solve systems of linear equations. The system described by `eqs` does not seem linear (note `10(a₁^2)` in `eqs[2]`), but upon closer inspection is found to be in fact linear (this is a feature of the permutation method). We can start by solving `eqs[1]` for `a₁` and then substitute it in `eqs[2]` and solve for `a₂`.  This process is done by function `solve_coef(eqs, ps)`:
+Back to our problem. Having the coefficients of the powers of `ϵ`, we can set each equation to 0 and solve the system of linear equations to find the numerical values of the coefficients. **Symbolics.jl** has a function `Symbolics.solve_for` that can solve systems of linear equations. We can start by solving `eqs[1]` for `a₁` and then substitute this in `eqs[2]` and solve for `a₂`.  This process is done by function `solve_coef(eqs, ps)`:
 
 ```julia
 function solve_coef(eqs, ps)
@@ -137,8 +137,9 @@ function solve_coef(eqs, ps)
 end
 ```
 
-Here, `eqs` is an array of expressions (assumed to be equal to 0) and `ps` is an array of variables. The result is a dictionary of variable => value pairs. For example, `solve_coef(eqs, a)` is `Dict(a₁ => -0.2,
-a₂ => -0.04)`. We can use larger values of `n` to improve the accuracy of estimations:
+Here, `eqs` is an array of expressions (assumed to be equal to 0) and `ps` is an array of variables. The result is a dictionary of *variable* => *value* pairs. For example, `solve_coef(eqs, a)` returns `Dict(a₁ => -0.2, a₂ => -0.04)`. Substituting back in the definition of `x`, i.e., `x = 1 + a[1]*ϵ + a[2]*ϵ^2`, we obtain `X = ϵ -> 1 - 0.2*ϵ - 0.04*ϵ^2`. Therefore, the solution to our original problem becomes `X(1)`, which is equal to 0.76.
+
+We can use larger values of `n` to improve the accuracy of estimations:
 
 | n | x              |
 |---|----------------|
@@ -153,31 +154,33 @@ a₂ => -0.04)`. We can use larger values of `n` to improve the accuracy of esti
 
 Remember the numerical value is 0.7549.
 
-The two functions `collect_powers` and `solve_coef(eqs, a)` are used in all the examples in this tutorial and show the main steps in the permutation method.
+The two functions `collect_powers` and `solve_coef(eqs, a)` are used in all the examples in this tutorial.
 
 ## Solving the Kepler's Equation
 
-Historically, the perturbation methods were first invented to solve orbital calculations needed to calculate the orbit of the moon and planets. In homage to this history, our second example has a celestial theme. Our goal is solve the Kepler's equation:
+Historically, the perturbation methods were first invented to solve orbital calculations needed to calculate the orbit of the Moon and the planets. In homage to this history, our second example has a celestial theme. Our goal is solve the Kepler's equation:
 
 𝐸 - 𝑒 sin(𝐸) = 𝑀.  
 
-where 𝑒 is the *eccentricity* of the elliptical orbit, 𝑀 is the *mean anomaly*, and 𝐸 (unknown) is the *eccentric anomaly* (the angle between the position of a planet in an elliptical orbit and the point of periapsis). We want to find a function 𝐸(𝑀; 𝑒). As the first example, it is easy to solve this problem using the Newton's method. For example, let 𝑒 = 0.01671 (the eccentricity of the Earth) and 𝑀 = π/2. We have `solve_newton(x - e*sin(x) - M, x, M)` equals to 1.5875 (compared to π/2 = 1.5708). Now, we try to solve the same problem using the perturbation techniques (see function `test_kepler`.
+where 𝑒 is the *eccentricity* of the elliptical orbit, 𝑀 is the *mean anomaly*, and 𝐸 (unknown) is the *eccentric anomaly* (the angle between the position of a planet in an elliptical orbit and the point of periapsis). This equation is central to solving two-body Keplerian orbits. We want to find a function 𝐸(𝑀; 𝑒).
 
-For 𝑒 = 0, 𝐸 = 𝑀. Therefore, we can use 𝑒 as our perturbation parameter. For consistency, we rename it to 𝜀. We start by defining the variables and 𝑥 (assuming `n = 3`):
+Similar to the first example, it is easy to solve this problem using the Newton's method. For example, let 𝑒 = 0.01671 (the eccentricity of the Earth) and 𝑀 = π/2. We have `solve_newton(x - e*sin(x) - M, x, M)` equals to 1.5875 (compared to π/2 = 1.5708). Now, we try to solve the same problem using the perturbation techniques (see function `test_kepler`).
+
+For 𝑒 = 0, we have 𝐸 = 𝑀. Therefore, we can use 𝑒 as our perturbation parameter. For consistency, we rename it to 𝜀. We start by defining the variables (assuming `n = 3`):
 
 ```julia
   @variables ϵ M a[1:n]
   x = def_taylor(ϵ, n, M)  
 ```
 
-The problem equation is `y = E - ϵ * sin(E) - M`. We further simplify by substituting sin with its power series (using `expand_sin` helper function):
+The problem equation is `eq = E - ϵ * sin(E) - M`. We further simplify by substituting sin with its power series (using `expand_sin` helper function):
 
 sin(𝐸) = 𝑥 - 𝑥³ / 6 + 𝑥⁵ / 120 - 𝑥⁷ / 5040 + 𝑂(𝑥⁹).
 
 We follow the same algorithm as before. We collect the coefficients of the powers of 𝜀:
 
 ```
-  eqs = collect_powers(y, ϵ, 1:n)
+  eqs = collect_powers(eq, ϵ, 1:n)
 ```
 
 and then solve for `a`:
@@ -189,12 +192,12 @@ and then solve for `a`:
 Finally, we substitute `vals` back in `x` to get a formula to calculate `E`:
 
 ```
-  sol = substitute(x, vals)
-  substitute(sol, Dict(ϵ => 0.01671, M => π/2))
+  X = substitute(x, vals)
+  substitute(X, Dict(ϵ => 0.01671, M => π/2))
 ```
 
-The result is 1.5876, compared to the numerical value of 1.5875. It is customary to order `sol` based on the powers of `M` instead of `ϵ`. We can calculate this series as `collect_powers(sol, M, 0:3)
-`. The result (after cleanup) is
+The result is 1.5876, compared to the numerical value of 1.5875. It is customary to order `X` based on the powers of `M` instead of `ϵ`. We can calculate this series as `collect_powers(sol, M, 0:3)
+`. The result (after manual cleanup) is
 
 ```julia
   E(M, ϵ) =
@@ -211,9 +214,9 @@ The first deviation is in the coefficient of 𝜀³𝑀⁵.
 
 ## The Trajectory of a Ball!
 
-In the first two examples, we applied the permutation method to algebraic problems. However, the main power of the permutation method is to solve differential equations (usually as ODEs, bot occasionally PDEs). Surprisingly, the main procedure developed to solve algebraic problems works well for differential equations. In fact, we will use the same two helper functions, `collect_powers` and `solve_coef`. The main difference is in the way we expand the dependent variables. For algebraic problems, the coefficients of 𝜀 are constants; whereas, for differential equations, they are functions of the dependent variable (usually time).
+In the first two examples, we applied the permutation method to algebraic problems. However, the main power of the permutation method is to solve differential equations (usually ODEs, but also occasionally PDEs). Surprisingly, the main procedure developed to solve algebraic problems works well for differential equations. In fact, we will use the same two helper functions, `collect_powers` and `solve_coef`. The main difference is in the way we expand the dependent variables. For algebraic problems, the coefficients of 𝜀 are constants; whereas, for differential equations, they are functions of the dependent variable (usually time).
 
-For the first example of how to solve an ODE, we have chosen a simple and well-behaved problem. The problem is a variation of a standard first-year physics problem: what is the trajectory of an object (say, a ball or a rocket) thrown vertically at velocity 𝑣 from the surface of a planet. Assuming a  constant acceleration of gravity, 𝑔, every burgeoning physicist knows the answer: 𝑥(𝑡) = 𝑣𝑡 - 𝑔𝑡²/2. However, what happens if 𝑔 is not constant? Specifically, 𝑔 is inversely proportional to the distant from the center of the planet. If 𝑣 is large, the assumption of constant gravity does not hold. However, unless 𝑣 is large compared to the escape velocity, the correction is usually small. After simplifications, the problem becomes 𝑥̈(𝑡) = -(1 + 𝜀𝑥(𝑡))⁻², assuming 𝑥(0) = 0, and 𝑥̇(0) = 1. Note that for 𝜀 = 0, it transforms to the standard one.
+For the first example on how to solve an ODE, we have chosen a simple and well-behaved problem. The problem is a variation of a standard first-year physics problem: what is the trajectory of an object (say, a ball or a rocket) thrown vertically at velocity 𝑣 from the surface of a planet. Assuming a  constant acceleration of gravity, 𝑔, every burgeoning physicist knows the answer: 𝑥(𝑡) = 𝑥(0) + 𝑣𝑡 - 𝑔𝑡²/2. However, what happens if 𝑔 is not constant? Specifically, 𝑔 is inversely proportional to the distant from the center of the planet. If 𝑣 is large, the assumption of constant gravity does not hold. However, unless 𝑣 is large compared to the escape velocity, the correction is usually small. After simplifications and reframing in dimensionless variables, the problem becomes 𝑥̈(𝑡) = -(1 + 𝜀𝑥(𝑡))⁻², assuming 𝑥(0) = 0, and 𝑥̇(0) = 1. Note that for 𝜀 = 0, this equation transforms back to the standard one.
 
 Let's start with defining the variables
 
@@ -227,7 +230,7 @@ Next, we define 𝑥 (for `n = 3`):
   x = y[1] + y[2]*ϵ + y[3]*ϵ^2
 ```
 
-We need the second derivative of `x`. It may seem that we can do this using `Differential(t)`; however, this action needs to wait! Instead, we define the dummy variables `∂∂y` as the placeholder for the derivatives and define
+We need the second derivative of `x`. It may seem that we can do this using `Differential(t)`; however, this operation needs to wait! Instead, we define dummy variables `∂∂y` as the placeholder for the second derivatives and define
 ```julia
   ∂∂x = ∂∂y[1] + ∂∂y[2]*ϵ + ∂∂y[3]*ϵ^2
 ```
@@ -254,7 +257,7 @@ At this stage,
   )
 ```
 
-Our system of ODEs is forming. Note the triangular form of the relationship. This is time to convert `∂∂`s to the correct **Symbolics.jl** form:
+Our system of ODEs is forming. Note the triangular form of the relationship. This is time to convert `∂∂`s to the correct **Symbolics.jl** form by substitution:
 
 ```julia
   D = Differential(t)
@@ -298,7 +301,7 @@ and shows the trajectories for a range of `ϵ`:
 
 ![](figures/rocket.png)
 
-As expected, the higher `ϵ` is (less effective gravity), the object goes higher and stays up for a longer duration. Of course, we could have solved the problem directly using as ODE solver. One of the benefits of the perturbation method is that we need to run the ODE solver only once and then can just calculate the answer for different values of `ϵ`; whereas, if we were using direct method, we needed to run the solver once for each value of `ϵ`.
+As expected, the higher `ϵ` is (meaning the gravity is less with altitude), the object goes higher and stays up for a longer duration. Of course, we could have solved the problem directly using as ODE solver. One of the benefits of the perturbation method is that we need to run the ODE solver only once and then can just calculate the answer for different values of `ϵ`; whereas, if we were using the direct method, we needed to run the solver once for each value of `ϵ`.
 
 ## A Weakly Nonlinear Oscillator
 

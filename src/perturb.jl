@@ -50,12 +50,12 @@ end
 function test_quintic(n=4)
     @variables ϵ z a[1:n]
     x = def_taylor(ϵ, a, 1)
-    y = x^5 + ϵ*x - 1
-    eqs = collect_powers(y, ϵ, 1:n)
+    eq = x^5 + ϵ*x - 1
+    eqs = collect_powers(eq, ϵ, 1:n)
     vals = solve_coef(eqs, a)
-    sol = substitute(x, vals)
+    X = substitute(x, vals)
 
-    xₚ = substitute(sol, Dict(ϵ => 1))
+    xₚ = substitute(X, Dict(ϵ => 1))
     xₙ = solve_newton(z^5 + z - 1, z, 1.0)
     return xₚ, xₙ
 end
@@ -66,16 +66,15 @@ end
 function test_kepler(n=4)
     @variables ϵ z M a[1:n]
     x = def_taylor(ϵ, a, M)
-    y = x - ϵ * expand_sin(x, n) - M
-    eqs = collect_powers(y, ϵ, 1:n)
+    eq = x - ϵ * expand_sin(x, n) - M
+    eqs = collect_powers(eq, ϵ, 1:n)
     vals = solve_coef(eqs, a)
-    sol = substitute(x, vals)
-    println(sol)
+    X = substitute(x, vals)
 
     𝑒 = 0.01671    # The Earth eccentricity
     M₀ = π/2
 
-    xₚ = substitute(sol, Dict(ϵ => 𝑒, M => M₀))
+    xₚ = substitute(X, Dict(ϵ => 𝑒, M => M₀))
     xₙ = solve_newton(z - 𝑒*sin(z) - M₀, z, M₀)
     return xₚ, xₙ
 end
