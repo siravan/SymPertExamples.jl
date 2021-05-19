@@ -15,6 +15,8 @@ In this tutorial our goal is to show how to use Julia and **Symbolics.jl** to so
 We start with the "hello world!" analog of the perturbation problems: solving the quintic (fifth-order) equations. We want to find 𝑥 such that 𝑥⁵ + 𝑥 = 1. According to the Abel's theorem, a general quintic equation does not have a closed form solution. Of course, we can easily solve this equation numerically; for example, using the Newton's method. Here, we use the following implementation of the Newton's method:
 
 ```Julia
+using Symbolics, SymbolicUtils
+
 function solve_newton(f, x, x₀; abstol=1e-8, maxiter=50)
     xₙ = Float64(x₀)
     fₙ₊₁ = x - f / Symbolics.derivative(f, x)
@@ -100,7 +102,7 @@ function collect_powers(eq, x, ns; max_power=100)
     eqs = []
     for i in ns
         powers = Dict(x^j => (i==j ? 1 : 0) for j=1:last(ns))
-        push!(eqs, substitute(expand(eq), powers))
+        push!(eqs, substitute(eq, powers))
     end
     eqs
 end
@@ -211,4 +213,151 @@ The first deviation is in the coefficient of 𝜀³𝑀⁵.
 
 In the first two examples, we applied the permutation method to algebraic problems. However, the main power of the permutation method is to solve differential equations (usually as ODEs, bot occasionally PDEs). Surprisingly, the main procedure developed to solve algebraic problems works well for differential equations. In fact, we will use the same two helper functions, `collect_powers` and `solve_coef`. The main difference is in the way we expand the dependent variables. For algebraic problems, the coefficients of 𝜀 are constants; whereas, for differential equations, they are functions of the dependent variable (usually time).
 
-For the first example of how to solve an ODE, we have chosen a simple and well-behaved problem. The problem is a variation of a standard first-year physics problem: what is the trajectory of an object (say, a ball or a rocket) thrown vertically at velocity 𝑣 from the surface of a planet. Assuming a  constant acceleration of gravity, 𝑔, every burgeoning physicist knows the answer: 𝑥(𝑡) = 𝑣𝑡 - 𝑔𝑡²/2. However, what happens if 𝑔 is not constant? Specifically, 𝑔 is inversely proportional to the distant from the center of the planet. After simplifications, the problem becomes how to solve 𝑥(𝑡) = -(1 + 𝜀𝑥(𝑡))⁻², assuming 𝑥(0) = 0, and ̇𝑥(0) = 1. 
+For the first example of how to solve an ODE, we have chosen a simple and well-behaved problem. The problem is a variation of a standard first-year physics problem: what is the trajectory of an object (say, a ball or a rocket) thrown vertically at velocity 𝑣 from the surface of a planet. Assuming a  constant acceleration of gravity, 𝑔, every burgeoning physicist knows the answer: 𝑥(𝑡) = 𝑣𝑡 - 𝑔𝑡²/2. However, what happens if 𝑔 is not constant? Specifically, 𝑔 is inversely proportional to the distant from the center of the planet. If 𝑣 is large, the assumption of constant gravity does not hold. However, unless 𝑣 is large compared to the escape velocity, the correction is usually small. After simplifications, the problem becomes 𝑥̈(𝑡) = -(1 + 𝜀𝑥(𝑡))⁻², assuming 𝑥(0) = 0, and 𝑥̇(0) = 1. Note that for 𝜀 = 0, it transforms to the standard one.
+
+Let's start with defining the variables
+
+```julia
+  @variables ϵ t y[1:n](t) ∂∂y[1:n]
+```
+
+Next, we define 𝑥 (for `n = 3`):
+
+```julia
+  x = y[1] + y[2]*ϵ + y[3]*ϵ^2
+```
+
+We need the second derivative of `x`. It may seem that we can do this using `Differential(t)`; however, this action needs to wait! Instead, we define the dummy variables `∂∂y` as the placeholder for the derivatives and define
+```julia
+  ∂∂x = ∂∂y[1] + ∂∂y[2]*ϵ + ∂∂y[3]*ϵ^2
+```
+as the second derivative of `x`. After rearrangement, our governing equation is 𝑥̈(𝑡)(1 + 𝜀𝑥(𝑡))² + 1 = 0, or
+
+```Julia
+  eq = ∂∂x * (1 + ϵ*x)^2 + 1
+```
+
+The next steps are the same as before (however, note that we pass `0:n-1` to `collect_powers` because the zeroth order term is needed here)
+
+```julia
+  eqs = collect_powers(eq, ϵ, 0:n-1)
+  vals = solve_coef(eqs, ∂∂y)
+```
+
+At this stage,
+
+```julia
+  vals = Dict(
+    ∂∂y₁ => -1.0,
+    ∂∂y₂ => 2.0y₁(t),
+    ∂∂y₃ => 2.0y₂(t) - (3.0(y₁(t)^2))
+  )
+```
+
+Our system of ODEs is forming. Note the triangular form of the relationship. This is time to convert `∂∂`s to the correct **Symbolics.jl** form:
+
+```julia
+  D = Differential(t)
+  subs = Dict(∂∂y[i] => D(D(y[i])) for i = 1:n)
+  eqs = [substitute(first(v), subs) ~ substitute(last(v), subs) for v in vals]
+```
+
+Now, `eqs` becomes
+
+```julia
+  [Differential(t)(Differential(t)(y₁(t))) ~ -1.0,
+   Differential(t)(Differential(t)(y₂(t))) ~ 2.0y₁(t),
+   Differential(t)(Differential(t)(y₃(t))) ~ 2.0y₂(t) - (3.0(y₁(t)^2))]
+```
+
+We are nearly there! From this point on, the rest is standard ODE solving procedures. Potentially we can use a symbolic ODE solver to find a closed form solution to this problem. However, **Symbolics.jl** currently does not support this functionality. Instead, we solve the problem numerically. We form an `ODESystem`, lower the order (convert second derivatives to first), generate an `ODEProblem` (after passing the correct initial conditions), and, finally, solve it.
+
+```Julia
+  using ModelingToolkit, DifferentialEquations
+
+  sys = ODESystem(eqs, t)
+  sys = ode_order_lowering(sys)
+  prob = ODEProblem(sys, [1.0, 0.0, 0.0, 0.0, 0.0, 0.0], (0, 5.0))
+  sol = solve(prob; dtmax=0.01)
+```
+
+The solution to the problem can be written as
+
+```julia
+  X = ϵ -> sol[y[1]] .+ sol[y[2]] * ϵ .+ sol[y[3]] * ϵ^2
+```
+
+The following figure is generated by running
+```julia
+  using Plots
+
+  plot(sol.t, hcat([X(ϵ) for ϵ = 0.0:0.1:0.5]...))    
+```
+
+and shows the trajectories for a range of `ϵ`:
+
+![](../figures/rocket.png)
+
+As expected, the higher `ϵ` is (less effective gravity), the object goes higher and stays up for a longer duration. Of course, we could have solved the problem directly using as ODE solver. One of the benefits of the perturbation method is that we need to run the ODE solver only once and then can just calculate the answer for different values of `ϵ`; whereas, if we were using direct method, we needed to run the solver once for each value of `ϵ`.
+
+## A Weakly Nonlinear Oscillator
+
+For our final example, we have chosen a simple example from a very important class of problems, the nonlinear oscillators. As we will see, perturbation theory has difficulty providing a good solution to this problem, but the process is instructive. This example follows closely chapter 7.6 of *Nonlinear Dynamics and Chaos* by Steven Strogatz.
+
+The problem is to solve 𝑥̈(𝑡) + 2𝜀𝑥̇ + 𝑥 = 0, assuming 𝑥(0) = 0, and 𝑥̇(0) = 1. If 𝜀 = 0, the problem reduces to the simple linear harmonic oscillator with the exact solution 𝑥(t) = sin(𝑡). We follow the same steps as the previous example.
+
+```julia
+  @variables ϵ t y[1:n](t) ∂y[1:n] ∂∂y[1:n] # n = 3
+  x = y[1] + y[2]*ϵ + y[3]*ϵ^2
+  ∂x = ∂y[1] + ∂y[2]*ϵ + ∂y[3]*ϵ^2
+  ∂∂x = ∂∂y[1] + ∂∂y[2]*ϵ + ∂∂y[3]*ϵ^2
+```
+
+Note that now we also need the first derivative terms. Continuing,
+
+```julia
+  eq = ∂∂x + 2*ϵ*∂x + x
+  eqs = collect_powers(eq, ϵ, 0:n-1)
+  vals = solve_coef(eqs, ∂∂y)
+```
+
+Let's inspect `vals`:
+
+```julia
+  vals = Dict(
+    ∂∂y₁ => -y₁(t),
+    ∂∂y₂ => -2.0∂y₁ - y₂(t),
+    ∂∂y₃ => -2.0∂y₂ - y₃(t))
+  )
+```
+
+Next, we need to replace `∂`s and `∂∂`s with their **Symbolics.jl** counterparts:
+
+```julia
+  D = Differential(t)
+  subs1 = Dict(∂y[i] => D(y[i]) for i = 1:n)
+  subs2 = Dict(∂∂y[i] => D(D(y[i])) for i = 1:n)
+  subs = subs1 ∪ subs2
+  eqs = [substitute(first(v), subs) ~ substitute(last(v), subs) for v in vals]
+```
+
+We continue with converting to an `ODEProblem`, solving it, and finally plot the results against the exact solution to the original problem.
+
+```julia
+  sys = ODESystem(eqs, t)
+  sys = ode_order_lowering(sys)
+  prob = ODEProblem(sys, [1.0, 0.0, 0.0, 0.0, 0.0, 0.0], (0, 50.0))
+  sol = solve(prob; dtmax=0.01)
+
+  T = sol.t
+  X = ϵ -> sol[y[1]] .+ sol[y[2]] * ϵ .+ sol[y[3]] * ϵ^2
+  Y = ϵ -> exp.(-ϵ*T) .* sin.(sqrt(1 - ϵ^2)*T) / sqrt(1 - ϵ^2)    # exact solution
+
+  plot(sol.t, [Y(0.1), X(0.1)])
+```
+
+The result is (compare to Figure 7.6.2 in *Nonlinear Dynamics and Chaos*)
+
+![](../figures/oscillator.png)
+
+The two curves fit well for the first couple of cycles, but then the perturbation method curve diverges from the true solution. The main reason is that the problem has two or more time-scales.
