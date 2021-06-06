@@ -1,139 +1,35 @@
 using Symbolics, SymbolicUtils
 using SymbolicUtils: istree, operation, arguments
-using Symbolics: value, get_variables, solve_for
+using Symbolics: value, get_variables, solve_for, derivative
 using SymbolicUtils.Rewriters
+using SymbolicUtils.Code
 
-# @syms 𝑛 taylor(x,a,eq) b(n) D(x,eq)
-
-is_taylor(x) = istree(x) && (operation(x)==taylor || any(is_taylor.(arguments(x))))
-is_not_taylor(x) = !is_taylor(x)
-
-#taylor(x, 𝑛, a₀, eq) = a₀ + sum([x^i * substitute(eq, Dict(𝑛 => Float64(i))) for i=1:5])
-
-# tay_sum1 = @acrule taylor(~x,~a1,~eq1) + taylor(~x,~a2,~eq2) => taylor(~x, ~a1 + ~a2,~eq1 + ~eq2)
-# tay_sum2 = @acrule ~z::is_not_taylor + taylor(~x,~a,~eq) => taylor(~x,~z + ~a,~eq)
-# tay_sum3 = @acrule taylor(~x,~a1,~eq1) + ~u2::is_not_taylor * taylor(~x,~a2,~eq2) => taylor(~x,~a1 + ~a2*~u2,~eq1 + ~eq2*~u2)
-# tay_sum4 = @acrule ~u1::is_not_taylor * taylor(~x,~a1,~eq1) + ~u2::is_not_taylor * taylor(~x,~a2,~eq2) => taylor(~x,~a1*~u1 + ~a2*~u2,~eq1*~u1 + ~eq2*~u2)
-# tay_mul = @acrule ~z::is_not_taylor * taylor(~x,~a,~eq) => taylor(~x, ~a*~z,~eq*~z)
-# tay_div = @acrule taylor(~x,~a,~eq) / ~z::is_not_taylor => taylor(~x, ~a/~z,~eq/~z)
-#
-# tay_diff1 = @rule D(~x, taylor(~x,~a,~eq)) => taylor(~x,D(~x,~a) + substitute(~eq, Dict(𝑛 => 1)), substitute(𝑛 * ~eq, Dict(𝑛 => 𝑛+1)))
-# tay_diff2 = @rule D(~x, b(~n)) => 0
-# tay_diff3 = @rule D(~x, ~y::is_not_taylor) => Differential(~x)(~y)
-#
-# tay_rules = Chain([tay_mul, tay_div, tay_sum1, tay_sum2, tay_sum3, tay_sum4])
-# tay_diffs = Chain([tay_diff1, tay_diff2, tay_diff3])
-
-function simplify_taylor(eq, order)
-    w = z
-    for i = 1:order
-        w = Prewalk(PassThrough(tay_diffs))(w)
-        w = expand_derivatives(w)
-        w = Fixpoint(tay_rules)(w)
-    end
-    w
-end
-
-function realize_taylor(t, N)
-    if istree(t) && operation(t)==taylor
-        x, a, eq = arguments(t)
-
-        eqs = [substitute(a, Dict(𝑛 => 0))]
-        for i=1:N
-            push!(eqs, substitute(eq, Dict(𝑛 => i)))
-        end
-
-        subs = Dict(b(i) => c[i+1] for i=0:10)
-        eqs = [substitute(eq, subs) for eq in eqs]
-
-        return eqs
-    end
-end
-
-function apply_initial_values(eqs, u0)
-    [substitute(eq,u0) for eq in eqs]
-end
-
-###############################################################################
-
-@syms BAdd(x,y) BMul(x,y)
-
-to_BAdd(x) = x
-to_BAdd(x, y...) = BAdd(x, to_BAdd(y...))
-
-to_BMul(x) = x
-to_BMul(x, y...) = BMul(x, to_BMul(y...))
-
-BAdd_rule = @rule +(~~xs) => to_BAdd(~~xs...)
-BMul_rule = @rule *(~~xs) => to_BMul(~~xs...)
-
-binary_op_rules = Chain([BAdd_rule, BMul_rule])
-
-function convert_binary_op(x)
-    x = Prewalk(PassThrough(BMul_rule))(x)
-    Prewalk(PassThrough(BAdd_rule))(x)
-end
-
-iverson(x, y) = exp(-(x-y)^2/1e-8)
-
-sum_rule1 = @rule BAdd(taylor(~x,~a1,~eq1), taylor(~x,~a2,~eq2)) => taylor(~x, ~a1 + ~a2, ~eq1 + ~eq2)
-sum_rule2 = @rule BAdd(taylor(~x,~a,~eq), ~u::is_not_taylor) => taylor(~x, ~a + ~u, ~eq)
-sum_rule3 = @rule BAdd(~u::is_not_taylor, taylor(~x,~a,~eq)) => taylor(~x, ~a + ~u, ~eq)
-mul_rule1 = @rule BMul(taylor(~x,~a,~eq), ~u::is_not_taylor) => taylor(~x, ~a * ~u, ~eq * ~u)
-mul_rule2 = @rule BMul(~u::is_not_taylor, taylor(~x,~a,~eq)) => taylor(~x, ~a * ~u, ~eq * ~u)
-div_rule = @rule taylor(~x,~a,~eq) / ~u::is_not_taylor => taylor(~x, ~a / ~u, ~eq / ~u)
-neg_rule = @rule -taylor(~x,~a,~eq) => taylor(~x, -~a, ~eq)
-
-tay_diff1 = @rule D(~x, taylor(~x,~a,~eq)) => taylor(~x,D(~x,~a) + substitute(~eq, Dict(𝑛 => 1)), substitute(𝑛 * ~eq, Dict(𝑛 => 𝑛+1)))
-tay_diff2 = @rule D(~x, b(~n)) => 0
-tay_diff3 = @rule D(~x, ~y::is_not_taylor) => Differential(~x)(~y)
-
-tay_rules = Chain([sum_rule1, sum_rule2, sum_rule3, mul_rule1, mul_rule2, div_rule, neg_rule])
-tay_diffs = Chain([tay_diff1, tay_diff2, tay_diff3])
-
-function simplify_taylor(eq, order)
-    w = z
-    for i = 1:order
-        w = Prewalk(PassThrough(tay_diffs))(w)
-        w = expand_derivatives(w)
-    end
-    for i = 1:order
-        w = Prewalk(PassThrough(tay_rules))(w)
-    end
-    w
-end
-
-############################################################################
-
-diff_vars(n) = diff_vars(n, 0)
-
-function diff_vars(n, x₀)
-    y = def_taylor(x - x₀, a[2:n], a[1])
-    D = Differential(x)
-    x, y, D, n
-end
-
-function eqs_linear_diffeq(p, eq)
-    eq = expand_derivatives(eq)
-    collect_powers(eq, p.x, 0:p.n)
-end
-
-function solve_linear_diffeq(p, eq, order)
-    eqs = eqs_linear_diffeq(p, eq)
-    vars = solve_coef(eqs, a[order+1:p.n])
-    return vars
-end
-
-#############################################################################
-
-@syms pox(k, n)
-
-function sym_taylor(x, n)
+"""
+    sym_taylor generates a Taylor series on variable x to order n and at
+    point x₀, i.e., Σ aᵢ*(x - x₀)ⁱ
+"""
+function sym_taylor(x, n, x₀=0)
     x = value(x)
-    @variables α[0:n]
-    a = value.(α)
-    a[1] + sum([a[i+1]*x^i for i = 1:n])
+    @variables a[0:n]
+    a = value.(a)
+    a[1] + sum([a[i+1]*(x-x₀)^i for i = 1:n])
 end
+
+"""
+    sym_frobenius generates a Frobenius series on variable x to order n and at
+    point x₀, i.e., (x - x₀)^α Σ aᵢ*(x - x₀)ⁱ
+"""
+function sym_frobenius(x, n, x₀=0)
+    x = value(x)
+    @variables a[0:n]
+    a = value.(a)
+    @syms α
+    (x-x₀)^α * sym_taylor(x, n, x₀)
+end
+
+# pox (power-of-x) is a symbolic function to keep track of the powers of x
+# pox(k,n) means k*x^n
+@syms pox(k, n)
 
 is_pox(x) = istree(x) && operation(x)==pox
 is_not_pox(x) = !is_pox(x)
@@ -143,15 +39,19 @@ get_power(p) = is_pox(p) ? arguments(p)[2] : 0
 
 replace_x(eq, x) = substitute(eq, Dict(x => pox(1,1)))
 
-count_rule1 = @rule ^(pox(~k, ~n1), ~n2) => pox(^(~k,~n2), ~n1 * ~n2)
+count_rule1 = @rule ^(pox(~k, ~n1), ~n2) => isequal(~k,1) ? pox(1, ~n1 * ~n2) : pox(^(~k,~n2), ~n1 * ~n2)
 count_rule2 = @rule pox(~k1, ~n1) * pox(~k2, ~n2) => pox(~k1 * ~k2, ~n1 + ~n2)
 count_rule3 = @acrule pox(~k, ~n) * ~u::is_not_pox => pox(~k * ~u, ~n)
 
+"""
+    collect_powers separates the powers of x in eq (a polynomial) and returns
+    a dictionary of power => term
+"""
 function collect_powers(eq, x)
     eq = expand(expand_derivatives(eq))
     eq = replace_x(eq, x)
-    eq = Prewalk(PassThrough(count_rule1))(eq)
-    eq = Fixpoint(Prewalk(PassThrough(Chain([count_rule2, count_rule3]))))(eq)
+    #eq = Prewalk(PassThrough(count_rule1))(eq)
+    eq = Fixpoint(Prewalk(PassThrough(Chain([count_rule1, count_rule2, count_rule3]))))(eq)
 
     eqs = Dict{Any, Any}()
 
@@ -167,32 +67,109 @@ function collect_powers(eq, x)
     eqs
 end
 
-function solve_coef(eqs)
-    eqs = collect(values(sort(eqs)))
+"""
+    strip_powers removes the powers from the output of collect_powers
+    and returns a sorted list of terms/sub-equations
+"""
+function strip_powers(eqs)
+    @syms α
+    d = Dict(α => 0)
+    eqs = Dict(substitute(power, d) => eq for (power, eq) in eqs)
+    collect(values(sort(eqs)))
+end
+
+"""
+    solve_rational gets a triangular system of linear equations and solve
+    for the variables one by one starting from the first equation
+
+    eqs is a list of terms as prepared by strip_powers
+
+    solve_rational tries to generate rational results but falls back to reals
+    if not possible
+"""
+function solve_rational(eqs)
     eqs = Num.(eqs)
-    a = value.(α)
+    @variables β[0:length(eqs)]
+    a = value.(β)
     vals = Dict()
 
-    for i = 1:length(eqs)
-        eq = substitute(eqs[i], vals)
+    for eq in eqs
         vars = get_variables(eq)
+        vars = filter(x -> !haskey(vals,x), vars)
 
-        if length(vars) > 1
+        if length(vars) > 0
+            dep = vars[end]
+            eq = substitute(eq, vals)
             # the last variable of each eq is considered the dependent variable
-            dep = sort(vars; by=nameof)[end]
-            vals[dep] = value(solve_for(eq ~ 0, dep))
+            A = value(substitute(eq, Dict(dep => 0)))
+            B = value(substitute(eq, Dict(dep => 1)))
+            try
+                vals[dep] = A // (B - A)
+            catch
+                vals[dep] = A / (B - A)
+            end
         end
     end
 
     vals
 end
 
+"""
+    finalize_taylor substitutes the calculated coefficients back into the
+    original Taylor or Frobenius series
+"""
 function finalize_taylor(x, y, vals)
     u = substitute(y, vals)
     vars = [v for v in get_variables(y) if !isequal(v,x)]
     factor(u, vars)
 end
 
+"""
+    A main entry point
+    solve_taylor solves a Taylor series expansion of a linear differential equation
+
+    x is the independent variable (a Symbolic Sym)
+    y is the dependent variable (a Symbolic Sym)
+    diffeq is the differential equation, assuming diffeq ~ 0
+"""
+function solve_taylor(x, y, diffeq)
+    eqs = strip_powers(collect_powers(diffeq, x))
+    vals = solve_rational(eqs)
+    finalize_taylor(x, y, vals)
+end
+
+"""
+    A main entry point
+    solve_frobenius solves a Frobenius series expansion of a linear differential equation
+
+    x is the independent variable (a Symbolic Sym)
+    y is the dependent variable (a Symbolic Sym)
+    diffeq is the differential equation, assuming diffeq ~ 0
+"""
+function solve_frobenius(x, y, diffeq; abstol=1e-8)
+    eqs = strip_powers(collect_powers(diffeq, x))
+    eq = eqs[1]
+    @syms α
+    d = Dict(v => 1 for v in get_variables(eq) if !isequal(v, α))
+
+    rs, zs = find_roots(substitute(eq, d), α)
+    isempty(rs) && error("The indicial equation has no real root")
+    α₁ = rs[end]
+    @info "α is $α₁"
+
+    d = Dict(α => α₁)
+    eqs = [substitute(eq,d) for eq in eqs]
+    vals = solve_rational(eqs[2:end])
+    vals[α] = α₁
+    finalize_taylor(x, y, vals)
+end
+
+###############################################################################
+
+"""
+    factor factors a polynomial eq over a list of variables (vars)
+    it assumes trivial separatibilty
+"""
 function factor(eq, vars)
     f = []
     for v in vars
@@ -203,8 +180,88 @@ function factor(eq, vars)
     +(f...)
 end
 
-function solve_taylor(x, y, diffeq)
-    eqs = collect_powers(diffeq)
-    vals = solve_coef(eqs)
-    finalize_taylor(x, y, vals)
+"""
+    solve_newton is a symbolic Newton-Ralphson solver
+    f is a symbolic equation to be solved (f ~ 0)
+    x is the variable to solve
+    x₀ is the initial guess
+"""
+function solve_newton(f, x, x₀; abstol=1e-8, maxiter=50)
+    xₙ = Complex(x₀)
+    ∂f = value(derivative(f, x))
+
+    for i = 1:maxiter
+        d = Dict(x => xₙ)
+        xₙ₊₁ = xₙ - substitute(f, d) / substitute(∂f, d)
+        if abs(xₙ₊₁ - xₙ) < abstol
+            return xₙ₊₁
+        else
+            xₙ = xₙ₊₁
+        end
+    end
+    return xₙ
+end
+
+"""
+    poly_degree returns the degree of a polynomial equation eq
+"""
+function poly_degree(poly, x)
+    eqs = collect_powers(poly, x)
+    round(Int, maximum(keys(eqs)))
+end
+
+"""
+    find_roots returns all the real and complex roots of a polynomial (poly)
+    for variable x
+
+    the output is rs, sz, where rs is a list of real roots and zs is a list of
+    complex roots
+
+    if poly is not a polynomial, the number of desired roots (n) needs to be
+    provided. For example, find_roots(sin(x), x, 10) returns 10 different, but
+    not necessarily sequential, multiples of π
+"""
+function find_roots(poly, x, n=-1; abstol=1e-8)
+    n = (n == -1 ? poly_degree(poly, x) : n)
+
+    rs = Float64[]
+    zs = Complex[]
+
+    while n > 0
+        z = solve_newton(poly, x, Complex(rand(),rand()))
+        if abs(imag(z)) < abstol
+            r = real(z)
+            push!(rs, r)
+            poly = poly / (x - r)
+            n -= 1
+        else
+            append!(zs, [z, conj(z)])
+            poly = poly / ((x-z)*(x-conj(z)))
+            n -= 2
+        end
+    end
+    sort(rs), zs
+end
+
+################################### Examples! #################################
+
+function test_harmonic()
+    @syms x
+    y = sym_taylor(x, 10)
+    D = Differential(x)
+    solve_taylor(x, y, D(D(y)) + y)
+end
+
+function test_airy()
+    @syms x
+    y = sym_taylor(x, 10)
+    D = Differential(x)
+    solve_taylor(x, y, D(D(y)) + x*y)
+end
+
+function test_bessel(ν = sqrt(2))
+    @syms x
+    y = sym_frobenius(x, 10)
+    D = Differential(x)
+    solve_frobenius(x, y, x^2 * D(D(y)) + x * D(y) - (x^2 + ν^2)*y)
 end
