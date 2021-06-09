@@ -53,18 +53,24 @@ function collect_powers(eq, x)
     #eq = Prewalk(PassThrough(count_rule1))(eq)
     eq = Fixpoint(Prewalk(PassThrough(Chain([count_rule1, count_rule2, count_rule3]))))(eq)
 
-    eqs = Dict{Any, Any}()
+    if !istree(eq)
+        return Dict{Any, Any}(0 => eq)
+    elseif is_pox(eq)
+        return Dict{Any, Any}(get_power(eq) => get_coef(eq))
+    else
+        eqs = Dict{Any, Any}()
 
-    for term in arguments(eq)
-        n = get_power(term)
-        if haskey(eqs, n)
-            eqs[n] = eqs[n] + get_coef(term)
-        else
-            eqs[n] = get_coef(term)
+        for term in arguments(eq)
+            n = get_power(term)
+            if haskey(eqs, n)
+                eqs[n] = eqs[n] + get_coef(term)
+            else
+                eqs[n] = get_coef(term)
+            end
         end
-    end
 
-    eqs
+        return eqs
+    end
 end
 
 """
@@ -89,8 +95,6 @@ end
 """
 function solve_rational(eqs)
     eqs = Num.(eqs)
-    @variables β[0:length(eqs)]
-    a = value.(β)
     vals = Dict()
 
     for eq in eqs
@@ -146,7 +150,7 @@ end
     y is the dependent variable (a Symbolic Sym)
     diffeq is the differential equation, assuming diffeq ~ 0
 """
-function solve_frobenius(x, y, diffeq; abstol=1e-8)
+function solve_frobenius(x, y, diffeq; abstol=1e-8, rationalize_coef=false)
     eqs = strip_powers(collect_powers(diffeq, x))
     eq = eqs[1]
     @syms α
@@ -160,6 +164,9 @@ function solve_frobenius(x, y, diffeq; abstol=1e-8)
     d = Dict(α => α₁)
     eqs = [substitute(eq,d) for eq in eqs]
     vals = solve_rational(eqs[2:end])
+    if rationalize_coef
+        vals = rationalize(vals)
+    end
     vals[α] = α₁
     finalize_taylor(x, y, vals)
 end
@@ -243,6 +250,58 @@ function find_roots(poly, x, n=-1; abstol=1e-8)
     sort(rs), zs
 end
 
+##############################################################################
+
+function continued_fraction(x, n; abstol=1e-8)
+    try
+        l = zeros(Int, n)
+        for i = 1:n
+            l[i] = floor(Int, x)
+            Δx = x - l[i]
+            Δx < abstol && break
+            x = 1 / Δx
+        end
+        y = 0
+        for i = n:-1:1
+            if l[i] + y > 0
+                y = 1 // (l[i] + y)
+            end
+        end
+        return 1 // y
+    catch
+        return x
+    end
+end
+
+function float_to_rational(x; n=10, abstol=1e-8)
+    s = x < 0
+    y = continued_fraction(abs(x), n) * (s ? -1 : +1)
+    if abs(x - y) < abstol
+        return y
+    else
+        return x
+    end
+end
+
+# function rationalize(vals)
+#     r = Dict()
+#     for p in vals
+#         eq = last(p)
+#         vars = get_variables(eq)
+#         if length(vars) == 1
+#             var = vars[1]
+#             eq = eq / var
+#             if !(eq isa Int) || !(eq isa Rational)
+#                 eq = float_to_rational(eq)
+#             end
+#             r[first(p)] = eq * var
+#         else
+#             r[first(p)] = eq
+#         end
+#     end
+#     r
+# end
+
 ################################### Examples! #################################
 
 function test_harmonic()
@@ -259,9 +318,9 @@ function test_airy()
     solve_taylor(x, y, D(D(y)) + x*y)
 end
 
-function test_bessel(ν = sqrt(2))
+function test_bessel(ν = sqrt(2); rationalize_coef=false)
     @syms x
     y = sym_frobenius(x, 10)
     D = Differential(x)
-    solve_frobenius(x, y, x^2 * D(D(y)) + x * D(y) - (x^2 + ν^2)*y)
+    solve_frobenius(x, y, x^2 * D(D(y)) + x * D(y) - (x^2 + ν^2)*y; rationalize_coef=rationalize_coef)
 end
